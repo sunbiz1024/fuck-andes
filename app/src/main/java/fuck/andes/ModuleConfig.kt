@@ -20,8 +20,6 @@ internal object ModuleConfig {
     const val OP_LUS_SPEECH_HANDLER_CLASS =
         "com.android.server.policy.PhoneWindowManagerExtImpl\$OplusSpeechHandler"
 
-    const val POWER_ASSIST_INVOCATION_TYPE = 6
-    const val POWER_ASSIST_LAUNCH_MODE = 1
     const val CIRCLE_TO_SEARCH_ENTRYPOINT = 2
     const val OP_LUS_ASSIST_MESSAGE_WHAT = 0x3F3
     const val INTERCEPT_DEDUP_WINDOW_MS = 1_000L
