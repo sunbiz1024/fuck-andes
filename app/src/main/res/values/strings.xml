@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">FuckAndes</string>
+    <string name="xposed_description">干掉小布助手，电源键长按唤起 Google Gemini，手势条长按触发一圈即搜</string>
 </resources>
