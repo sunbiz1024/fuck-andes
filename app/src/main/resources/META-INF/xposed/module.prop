@@ -1,3 +1,9 @@
+id=fuck.andes
+name=FuckAndes
+version=v1.0.0
+versionCode=1
+author=sunbiz1024
+description=干掉小布/小爱助手，电源键长按唤起 Google Gemini，手势条长按触发一圈即搜
 minApiVersion=101
 targetApiVersion=101
 staticScope=true

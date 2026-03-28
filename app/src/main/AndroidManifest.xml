@@ -5,6 +5,19 @@
         android:allowBackup="false"
         android:description="@string/xposed_description"
         android:hasCode="true"
-        android:label="FuckAndes" />
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name">
+
+        <!-- 兼容旧版 Xposed/LSPosed 识别 -->
+        <meta-data
+            android:name="xposedmodule"
+            android:value="true" />
+        <meta-data
+            android:name="xposeddescription"
+            android:value="@string/xposed_description" />
+        <meta-data
+            android:name="xposedminversion"
+            android:value="93" />
+    </application>
 
 </manifest>
