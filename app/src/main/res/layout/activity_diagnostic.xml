@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FF0D1117"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <!-- 标题 -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="FuckAndes 诊断"
+        android:textColor="#FFFFFFFF"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="12dp" />
+
+    <!-- 模块状态 -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#FF1A3A1A"
+        android:padding="10dp"
+        android:layout_marginBottom="8dp"
+        android:text="✓  APK 已安装并运行"
+        android:textColor="#FF69DB7C"
+        android:textSize="13sp" />
+
+    <!-- 设备信息 / 作用域提示 -->
+    <TextView
+        android:id="@+id/tv_device_info"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#FF1A1A00"
+        android:padding="10dp"
+        android:layout_marginBottom="12dp"
+        android:textColor="#FFFFCC44"
+        android:textSize="12sp"
+        android:fontFamily="monospace" />
+
+    <!-- 操作按钮行 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="8dp">
+
+        <Button
+            android:id="@+id/btn_refresh"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:text="刷新日志" />
+
+        <Button
+            android:id="@+id/btn_copy"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="复制日志" />
+    </LinearLayout>
+
+    <!-- 日志标题栏 -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="── logcat  tag=FuckAndes ──"
+        android:textColor="#FF555555"
+        android:textSize="11sp"
+        android:layout_marginBottom="4dp" />
+
+    <!-- 滚动日志区 -->
+    <ScrollView
+        android:id="@+id/scroll_log"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="#FF0D1117">
+
+        <TextView
+            android:id="@+id/tv_log"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:padding="10dp"
+            android:text="(点击"刷新日志"加载)"
+            android:textColor="#FF7EE787"
+            android:textSize="11sp" />
+    </ScrollView>
+
+</LinearLayout>
