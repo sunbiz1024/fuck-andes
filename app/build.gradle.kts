@@ -21,6 +21,8 @@ android {
         release {
             isMinifyEnabled = false
             proguardFiles("proguard-rules.pro")
+            // 复用 debug keystore 签名，确保 APK 可被系统安装器正常解析
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
