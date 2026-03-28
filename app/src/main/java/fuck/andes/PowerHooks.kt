@@ -13,7 +13,9 @@ internal object PowerHooks {
 
     fun install(module: XposedModule, logger: ModuleLogger, classLoader: ClassLoader) {
         hookPowerLongPress(module, logger, classLoader)
+        hookMiuiPowerLongPress(module, logger, classLoader)
         hookOplusSpeechHandler(module, logger, classLoader)
+        hookMiuiSpeechHandler(module, logger, classLoader)
     }
 
     private fun hookPowerLongPress(
@@ -152,6 +154,84 @@ internal object PowerHooks {
             logger.warnThrottled("${source}_voice_command_missing", "$source: Google 未暴露 VOICE_COMMAND，回退原逻辑")
         }
         return false
+    }
+
+    private fun hookMiuiPowerLongPress(
+        module: XposedModule,
+        logger: ModuleLogger,
+        classLoader: ClassLoader
+    ) {
+        val miuiPwmClass = HookSupport.findClassOrNull(classLoader, ModuleConfig.MIUI_PHONE_WINDOW_MANAGER_CLASS)
+        if (miuiPwmClass == null) {
+            logger.warn("Xiaomi: 未找到 MiuiPhoneWindowManager，跳过 Xiaomi 电源键 Hook")
+            return
+        }
+        // 仅当 Miui 子类自身覆盖了 powerLongPress 时才补 Hook，避免与 AOSP Hook 重复
+        val powerLongPressMethod = runCatching {
+            miuiPwmClass.getDeclaredMethod("powerLongPress", Long::class.javaPrimitiveType!!)
+                .apply { isAccessible = true }
+        }.getOrNull()
+        if (powerLongPressMethod == null) {
+            logger.debug("Xiaomi: MiuiPhoneWindowManager 未覆盖 powerLongPress，由 AOSP Hook 覆盖")
+            return
+        }
+        val resolvedBehaviorMethod = HookSupport.findMethod(miuiPwmClass, "getResolvedLongPressOnPowerBehavior")
+        if (resolvedBehaviorMethod == null) {
+            logger.warn("Xiaomi: MiuiPhoneWindowManager 未找到 getResolvedLongPressOnPowerBehavior")
+            return
+        }
+
+        HookSupport.hookMethod(module, logger, powerLongPressMethod, "MiuiPhoneWindowManager.powerLongPress(long)") { chain ->
+            val behavior = module.getInvoker(resolvedBehaviorMethod).invoke(chain.getThisObject()) as Int
+            if (behavior !in setOf(4, 5)) {
+                return@hookMethod chain.proceed()
+            }
+            if (tryLaunchGoogleAssist(logger, chain.getThisObject(), "miuiPowerLongPress")) {
+                null
+            } else {
+                chain.proceed()
+            }
+        }
+    }
+
+    private fun hookMiuiSpeechHandler(
+        module: XposedModule,
+        logger: ModuleLogger,
+        classLoader: ClassLoader
+    ) {
+        val handlerClass = HookSupport.findClassOrNull(classLoader, ModuleConfig.MIUI_SPEECH_HANDLER_CLASS)
+        val handleMessageMethod = handlerClass?.let {
+            HookSupport.findMethod(it, "handleMessage", Message::class.java)
+        }
+        if (handleMessageMethod == null) {
+            logger.warn("Xiaomi: 未找到 ${ModuleConfig.MIUI_SPEECH_HANDLER_CLASS}.handleMessage(Message)")
+            return
+        }
+
+        HookSupport.hookMethod(
+            module,
+            logger,
+            handleMessageMethod,
+            "${ModuleConfig.MIUI_SPEECH_HANDLER_CLASS}.handleMessage"
+        ) { chain ->
+            val message = chain.getArg(0) as? Message
+            if (message?.what != ModuleConfig.MIUI_ASSIST_MESSAGE_WHAT) {
+                return@hookMethod chain.proceed()
+            }
+            val pwm = resolvePhoneWindowManager(chain.getThisObject())
+            if (pwm == null) {
+                logger.warnThrottled(
+                    "miui_speech_missing_pwm",
+                    "Xiaomi SpeechHandler 未能解析 PhoneWindowManager，回退原逻辑"
+                )
+                return@hookMethod chain.proceed()
+            }
+            if (tryLaunchGoogleAssist(logger, pwm, "MiuiSpeechHandler")) {
+                null
+            } else {
+                chain.proceed()
+            }
+        }
     }
 
     private fun resolvePhoneWindowManager(handlerInstance: Any): Any? {

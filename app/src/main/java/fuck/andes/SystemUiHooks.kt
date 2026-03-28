@@ -17,12 +17,17 @@ internal object SystemUiHooks {
     private var startContextualSearchMethod: Method? = null
 
     fun install(module: XposedModule, logger: ModuleLogger, classLoader: ClassLoader) {
+        installOplusOcrHook(module, logger, classLoader)
+        installMiAIHook(module, logger, classLoader)
+    }
+
+    private fun installOplusOcrHook(module: XposedModule, logger: ModuleLogger, classLoader: ClassLoader) {
         val businessClass = HookSupport.findClassOrNull(classLoader, ModuleConfig.OCR_BUSINESS_CLASS)
         val onLongPressedMethod = businessClass?.let {
             HookSupport.findMethod(it, "onLongPressed")
         }
         if (onLongPressedMethod == null) {
-            logger.warn("未找到 OplusOcrScreenBusiness.onLongPressed()")
+            logger.warn("未找到 OplusOcrScreenBusiness.onLongPressed()，跳过 OPPO OCR Hook")
             return
         }
 
@@ -42,11 +47,42 @@ internal object SystemUiHooks {
                 return@hookMethod chain.proceed()
             }
 
-            if (triggerCircleToSearch(logger)) {
-                null
-            } else {
-                chain.proceed()
+            if (triggerCircleToSearch(logger)) null else chain.proceed()
+        }
+    }
+
+    private fun installMiAIHook(module: XposedModule, logger: ModuleLogger, classLoader: ClassLoader) {
+        val miAiClass = HookSupport.findClassOrNull(classLoader, ModuleConfig.MIUI_AI_SCREEN_CLASS)
+        // 按优先级尝试多个方法名，兼容不同 HyperOS 版本
+        val triggerMethod = miAiClass?.let {
+            HookSupport.findMethod(it, "onLongPressed")
+                ?: HookSupport.findMethod(it, "onLongPress")
+                ?: HookSupport.findMethod(it, "notifyMiAILaunched")
+                ?: HookSupport.findMethod(it, "launchMiAI")
+                ?: HookSupport.findMethod(it, "startMiAI")
+        }
+        if (triggerMethod == null) {
+            logger.warn("Xiaomi: 未找到 ${ModuleConfig.MIUI_AI_SCREEN_CLASS} 中的 AI 触发方法，跳过 Xiaomi SystemUI Hook")
+            return
+        }
+
+        HookSupport.hookMethod(
+            module,
+            logger,
+            triggerMethod,
+            "${ModuleConfig.MIUI_AI_SCREEN_CLASS}.${triggerMethod.name}"
+        ) { chain ->
+            val context = resolveContext(chain.getThisObject())
+            if (context == null) {
+                logger.warnThrottled("xiaomi_systemui_context", "Xiaomi SystemUI 无法取得 Context，回退原小爱逻辑")
+                return@hookMethod chain.proceed()
             }
+
+            if (!canTriggerCircleToSearch(context, logger)) {
+                return@hookMethod chain.proceed()
+            }
+
+            if (triggerCircleToSearch(logger)) null else chain.proceed()
         }
     }
 
