@@ -85,7 +85,7 @@
             android:layout_height="wrap_content"
             android:fontFamily="monospace"
             android:padding="10dp"
-            android:text="(点击"刷新日志"加载)"
+            android:text="(点击&quot;刷新日志&quot;加载)"
             android:textColor="#FF7EE787"
             android:textSize="11sp" />
     </ScrollView>
