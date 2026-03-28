@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.widget.Button
@@ -25,6 +26,7 @@ internal class DiagnosticActivity : Activity() {
 
         fillDeviceInfo()
 
+        findViewById<Button>(R.id.btn_test_google).setOnClickListener { testGoogleLaunch() }
         findViewById<Button>(R.id.btn_refresh).setOnClickListener { loadLogs() }
         findViewById<Button>(R.id.btn_copy).setOnClickListener { copyLogs() }
 
@@ -53,12 +55,41 @@ internal class DiagnosticActivity : Activity() {
         findViewById<TextView>(R.id.tv_device_info).text = sb
     }
 
+    // ── 测试直接启动 Google ──────────────────────────────────────────────────
+
+    private fun testGoogleLaunch() {
+        val cts = Intent(ModuleConfig.CONTEXTUAL_SEARCH_ACTION)
+            .setPackage(ModuleConfig.GOOGLE_PACKAGE)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val voice = Intent(Intent.ACTION_VOICE_COMMAND)
+            .setPackage(ModuleConfig.GOOGLE_PACKAGE)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+        when {
+            packageManager.resolveActivity(cts, 0) != null -> {
+                startActivity(cts)
+                Toast.makeText(this, "已通过 Circle to Search 入口启动", Toast.LENGTH_SHORT).show()
+            }
+            packageManager.resolveActivity(voice, 0) != null -> {
+                startActivity(voice)
+                Toast.makeText(this, "已通过 VOICE_COMMAND 启动 Google", Toast.LENGTH_SHORT).show()
+            }
+            else -> Toast.makeText(
+                this,
+                "✗ Google App 未安装或未暴露任何入口，模块 Hook 成功也无法启动 Google",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
     // ── 日志读取 ─────────────────────────────────────────────────────────────
 
     private fun loadLogs() {
         val btn = findViewById<Button>(R.id.btn_refresh)
         btn.isEnabled = false
+        tvLog.text = "正在获取日志..."
         Thread {
+            tryGrantReadLogs()   // 先通过 su 授权
             val text = fetchLogcat()
             runOnUiThread {
                 tvLog.text = text
@@ -68,27 +99,36 @@ internal class DiagnosticActivity : Activity() {
         }.start()
     }
 
+    /** READ_LOGS 是签名权限，需 root 授权一次。 */
+    private fun tryGrantReadLogs() {
+        runCatching {
+            Runtime.getRuntime()
+                .exec(arrayOf("su", "-c", "pm grant fuck.andes android.permission.READ_LOGS"))
+                .waitFor()
+        }
+    }
+
     private fun fetchLogcat(): String {
-        // 1. 直接 logcat（有 READ_LOGS 或 root 时可用）
-        val args = arrayOf("logcat", "-d", "-t", "800", "-v", "time", "-s", "${ModuleConfig.TAG}:V")
-        val direct = execToString(args)
+        // 1. 直接读取（grant 成功后就能用）
+        val direct = execToString(arrayOf(
+            "logcat", "-d", "-t", "500", "-v", "threadtime", "-s", "${ModuleConfig.TAG}:V"
+        ))
         if (!direct.isNullOrBlank()) return direct
 
-        // 2. 通过 su 读取（root 设备）
-        val suArgs = arrayOf("su", "-c", "logcat -d -t 800 -v time -s ${ModuleConfig.TAG}:V")
-        val viaSu = execToString(suArgs)
+        // 2. 通过 su 直接执行 logcat
+        val viaSu = execToString(arrayOf(
+            "su", "-c", "logcat -d -t 500 -v threadtime -s ${ModuleConfig.TAG}:V"
+        ))
         if (!viaSu.isNullOrBlank()) return viaSu
 
         return buildString {
-            appendLine("(无法读取 logcat)")
+            appendLine("[无法读取 logcat]（su 授权未得到批准？）")
             appendLine()
-            appendLine("请用以下 adb 命令手动查看：")
+            appendLine("手动授权后再刷新：")
+            appendLine("  adb shell pm grant fuck.andes android.permission.READ_LOGS")
+            appendLine()
+            appendLine("或用 adb 直接看：")
             appendLine("  adb logcat -s ${ModuleConfig.TAG}")
-            appendLine()
-            appendLine("若日志为空，likely：")
-            appendLine("  1. LSPosed 未激活本模块")
-            appendLine("  2. 未勾选 android 作用域")
-            appendLine("  3. 模块激活后尚未重启")
         }
     }
 

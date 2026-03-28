@@ -14,6 +14,7 @@ internal object PowerHooks {
     fun install(module: XposedModule, logger: ModuleLogger, classLoader: ClassLoader) {
         hookPowerLongPress(module, logger, classLoader)
         hookMiuiPowerLongPress(module, logger, classLoader)
+        hookMiuiAssistLaunch(module, logger, classLoader)
         hookOplusSpeechHandler(module, logger, classLoader)
         hookMiuiSpeechHandler(module, logger, classLoader)
     }
@@ -38,7 +39,10 @@ internal object PowerHooks {
 
         HookSupport.hookMethod(module, logger, powerLongPressMethod, "PhoneWindowManager.powerLongPress(long)") { chain ->
             val behavior = module.getInvoker(resolvedBehaviorMethod).invoke(chain.getThisObject()) as Int
-            if (behavior !in setOf(4, 5)) {
+            // 始终记录行为码，便于诊断
+            logger.info("powerLongPress: behavior=$behavior")
+            // 4=GO_TO_VOICE_ASSIST 5=ASSISTANT；HyperOS 可能用更高自定义值，宽松拦截
+            if (behavior !in 4..9) {
                 return@hookMethod chain.proceed()
             }
 
@@ -183,7 +187,8 @@ internal object PowerHooks {
 
         HookSupport.hookMethod(module, logger, powerLongPressMethod, "MiuiPhoneWindowManager.powerLongPress(long)") { chain ->
             val behavior = module.getInvoker(resolvedBehaviorMethod).invoke(chain.getThisObject()) as Int
-            if (behavior !in setOf(4, 5)) {
+            logger.info("MiuiPWM.powerLongPress: behavior=$behavior")
+            if (behavior !in 4..9) {
                 return@hookMethod chain.proceed()
             }
             if (tryLaunchGoogleAssist(logger, chain.getThisObject(), "miuiPowerLongPress")) {
@@ -231,6 +236,48 @@ internal object PowerHooks {
             } else {
                 chain.proceed()
             }
+        }
+    }
+
+    /**
+     * HyperOS 3 可能不经过 powerLongPress 的 behavior 分支，而是直接在
+     * MiuiPhoneWindowManager 内调用 launchAssist / triggerVoiceAssist 等方法。
+     * 这里枚举常见名称，命中即拦截。
+     */
+    private fun hookMiuiAssistLaunch(
+        module: XposedModule,
+        logger: ModuleLogger,
+        classLoader: ClassLoader
+    ) {
+        val miuiPwmClass = HookSupport.findClassOrNull(classLoader, ModuleConfig.MIUI_PHONE_WINDOW_MANAGER_CLASS)
+            ?: return
+
+        val candidateNames = listOf(
+            "launchAssistant", "launchAssist", "launchVoiceAssistant",
+            "triggerVoiceAssist", "startAssistAction", "launchXiaoAi",
+            "startXiaoAi", "triggerAssist"
+        )
+
+        var found = false
+        for (name in candidateNames) {
+            // 无参版本
+            val m = runCatching {
+                miuiPwmClass.getDeclaredMethod(name).apply { isAccessible = true }
+            }.getOrNull() ?: continue
+
+            HookSupport.hookMethod(module, logger, m, "MiuiPhoneWindowManager.$name()") { chain ->
+                logger.info("MiuiPWM.$name() 被调用，尝试拦截为 Google")
+                if (tryLaunchGoogleAssist(logger, chain.getThisObject(), "miuiAssist.$name")) {
+                    null
+                } else {
+                    chain.proceed()
+                }
+            }
+            found = true
+        }
+
+        if (!found) {
+            logger.warn("Xiaomi: MiuiPhoneWindowManager 中未找到任何已知助手触发方法")
         }
     }
 
